@@ -67,20 +67,19 @@ defmodule HostPool do
 
     # Parse the result
     case result do
+      {:ok, :new} ->
+        {
+          :error,
+          :no_socket,
+          {pool_name, checkin_ref, owner, :new}
+        }
       {:ok, socket} ->
         {
           :ok,
           {pool_name, checkin_ref, owner, :return},
           socket
         }
-      # credo:disable-for-next-line
-      {:new,} ->
-        {
-          :error,
-          :no_socket,
-          {pool_name, checkin_ref, owner, :new}
-        }
-      error -> error
+      error = {:error, _reason} -> error
     end
   end
 
