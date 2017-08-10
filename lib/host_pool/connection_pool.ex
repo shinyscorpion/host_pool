@@ -30,21 +30,42 @@ defmodule HostPool.ConnectionPool do
 
   @impl true
   def handle_call({:checkout, id, {checkout_timeout, checkout_limit}}, from, state) do
+    debug = (elem(id, 0) == 'example.com')
+
+    if debug do
+      IO.puts "#{inspect from}:out: Checkout #{inspect id}"
+      IO.puts "#{inspect from}:out: Starting state #{inspect state}"
+    end
+
     host = Map.get(state, id, @starting_state)
     unavailable = Enum.count(host.checked_out)
 
-    cond do
-      Enum.count(host.items) > 0 ->
-        checkout_connection(host, id, checkout_limit, from, state)
-      unavailable >= @limit ->
-        queue_for_connection(host, id, checkout_timeout, from, state)
-      true ->
-        state = Map.put(state, id, host)
-        {:reply, {:ok, :new}, state}
+    s =
+      cond do
+        Enum.count(host.items) > 0 ->
+          checkout_connection(host, id, checkout_limit, from, state)
+        unavailable >= @limit ->
+          queue_for_connection(host, id, checkout_timeout, from, state)
+        true ->
+          state = Map.put(state, id, host)
+          {:reply, {:ok, :new}, state}
+      end
+
+    if debug do
+      IO.puts "#{inspect from}:out: Ending reply #{inspect s}"
     end
+
+    s
   end
 
   def handle_call({:checkin, {_, id, _, type}, socket}, from, state) do
+    debug = (elem(id, 0) == 'example.com')
+
+    if debug do
+      IO.puts "#{inspect from}:in: Checking in #{inspect id} with #{inspect socket}"
+      IO.puts "#{inspect from}:in: Starting state #{inspect state}"
+    end
+
     GenServer.reply(from, :ok)
 
     transport = id |> elem(2)
@@ -64,6 +85,10 @@ defmodule HostPool.ConnectionPool do
     updated_host =
       (return(host, type, socket) || add_new_connection(host, socket))
       |> check_queue()
+
+    if debug do
+      IO.puts "#{inspect from}:in: Ending state #{inspect Map.put(state, id, updated_host)}"
+    end
 
     {:noreply, Map.put(state, id, updated_host)}
   end

@@ -33,6 +33,8 @@ defmodule HostPool do
 
   @impl true
   def checkout(host, port, transport, client) do
+    debug = host == 'example.com'
+
     # Parse options
     options =
       client
@@ -57,6 +59,11 @@ defmodule HostPool do
       pool_name
       |> find_or_create_pool(checkin_ref)
 
+    if debug do
+      IO.puts "#{inspect self()}:pool-out: Starting with values: #{inspect {:checkout, checkin_ref, {connect_timeout, checkout_limit}}}"
+      IO.puts "#{inspect self()}:pool-out: Calling: #{inspect owner} for #{pool_name}"
+    end
+
     # Make the call
     result =
       GenServer.call(
@@ -65,31 +72,54 @@ defmodule HostPool do
         connect_timeout
       )
 
-    # Parse the result
-    case result do
-      {:ok, :new} ->
-        {
-          :error,
-          :no_socket,
-          {pool_name, checkin_ref, owner, :new}
-        }
-      {:ok, socket} ->
-        {
-          :ok,
-          {pool_name, checkin_ref, owner, :return},
-          socket
-        }
-      error = {:error, _reason} -> error
+    if debug do
+      IO.puts "#{inspect self()}:pool-out: ConnectionPool result: #{inspect result}"
     end
+
+    # Parse the result
+    response =
+      case result do
+        {:ok, :new} ->
+          {
+            :error,
+            :no_socket,
+            {pool_name, checkin_ref, owner, :new}
+          }
+        {:ok, socket} ->
+          {
+            :ok,
+            {pool_name, checkin_ref, owner, :return},
+            socket
+          }
+        error = {:error, _reason} -> error
+      end
+
+    if debug do
+      IO.puts "#{inspect self()}:pool-out: Done checking out #{inspect response}"
+    end
+
+    response
   end
 
   @impl true
-  def checkin(reference = {_pool, _data, owner, type}, socket) do
+  def checkin(reference = {_pool, data, owner, type}, socket) do
+    debug = elem(data, 0) == 'example.com'
+
+    if debug do
+      IO.puts "#{inspect self()}:pool-in: Checking in #{inspect reference} with #{inspect socket}"
+    end
+
     if type == :new do
       unclaim(socket)
     end
 
-    GenServer.call(owner, {:checkin, reference, socket})
+    result = GenServer.call(owner, {:checkin, reference, socket})
+
+    if debug do
+      IO.puts "#{inspect self()}:pool-in: Done checking in #{inspect result}"
+    end
+
+    result
   end
 
   @impl true
