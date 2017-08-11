@@ -71,14 +71,12 @@ defmodule HostPool.ConnectionPool do
     transport = id |> elem(2)
 
     # Clean socket if type is new
-    if type == {:ok, :new} do
-      claim(socket)
+    claim(socket)
+    transport.controlling_process socket, self()
+    transport.setopts socket, [{:keepalive, true}, {:active, :once}, {:packet, 0}]
 
-      transport.controlling_process socket, self()
-      transport.setopts socket, [{:keepalive, true}, {:active, true}]
-    else
-      transport.setopts socket, [{:active, true}]
-    end
+    # socket |> Port.info |> IO.inspect
+    # socket |> info() |> IO.inspect
 
     # Get and update host
     host = Map.get(state, id, @starting_state)
@@ -273,13 +271,13 @@ defmodule HostPool.ConnectionPool do
 
   @spec socket_alive?(atom, any) :: boolean
   defp socket_alive?(transport, socket) do
-    # with {:ok, _} <- transport.peername(socket) do
+    with {:ok, _} <- transport.peername(socket) do
       sync_socket(transport, socket)
-    # else
-    #   m ->
-    #     IO.puts "Connection closed: #{inspect m}"
-    #     false
-    # end
+    else
+      m ->
+        IO.puts "Connection closed [PEERNAME]: #{inspect m}"
+        false
+    end
   end
 
   @spec socket_alive?(atom, any) :: boolean
@@ -300,4 +298,7 @@ defmodule HostPool.ConnectionPool do
       0 -> true
     end
   end
+
+  def info(socket = {:sslsocket, {_, _port, _, _}, _}), do: :ssl.getopts(socket, [:keepalive])
+  def info(socket), do: :inet.getopts(socket, [:keepalive])
 end
