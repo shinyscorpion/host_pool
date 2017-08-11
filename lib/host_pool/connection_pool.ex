@@ -105,9 +105,9 @@ defmodule HostPool.ConnectionPool do
   @spec checkout_connection(map, tuple, non_neg_integer, tuple, map) :: tuple
   defp checkout_connection(
     host = %{items: [socket | items]},
-    id = {_, _, transport},
+    id = {hostname, _, transport},
     checkout_limit,
-    {client_pid, _},
+    from = {client_pid, _},
     state
   ) do
     host = Map.put(host, :items, items)
@@ -125,6 +125,10 @@ defmodule HostPool.ConnectionPool do
 
       {:reply, {:ok, socket}, Map.put(state, id, updated_host)}
     else
+      if hostname == 'example.com' do
+        IO.puts "#{inspect from}:in: LOST CONNECTION"
+      end
+
       # cleanup by closing socket
       close socket
 
@@ -269,11 +273,13 @@ defmodule HostPool.ConnectionPool do
 
   @spec socket_alive?(atom, any) :: boolean
   defp socket_alive?(transport, socket) do
-    with {:ok, _} <- transport.peername(socket) do
+    # with {:ok, _} <- transport.peername(socket) do
       sync_socket(transport, socket)
-    else
-      _ -> false
-    end
+    # else
+    #   m ->
+    #     IO.puts "Connection closed: #{inspect m}"
+    #     false
+    # end
   end
 
   @spec socket_alive?(atom, any) :: boolean
@@ -281,9 +287,15 @@ defmodule HostPool.ConnectionPool do
     {msg, msg_closed, msg_error} = transport.messages(socket)
 
     receive do
-      {^msg, ^socket, _} -> false
-      {^msg_closed, ^socket} -> false
-      {^msg_error, ^socket, _} -> false
+      m = {^msg, ^socket, _} ->
+        IO.puts "Connection closed [MSG]: #{inspect m}, #{inspect socket}"
+        false
+      m = {^msg_closed, ^socket} ->
+        IO.puts "Connection closed [MSG_CLOSED]: #{inspect m}, #{inspect socket}"
+        false
+      m = {^msg_error, ^socket, _} ->
+        IO.puts "Connection closed [MSG_ERROR]: #{inspect m}, #{inspect socket}"
+        false
     after
       0 -> true
     end
